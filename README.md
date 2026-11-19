@@ -30,9 +30,9 @@ transactions, 167,848 customers.
 |---|---|
 | Daily run | One business date from delivered files to published report in about 4 minutes, on a 4-core, 16 GB workstation |
 | Completeness | Every feed reconciles from the delivered file to the reporting layer; customers, accounts and cards match the core banking system column by column |
-| Laundering detection | On dates not used to tune the rules, 54.3% of laundering transfers raise an alert, and an alerted transfer is 20.7 times more likely to be laundering than the average transfer |
-| Sanctions screening | All 40 customers known to be on the lists found, each on the right entry |
-| Customer 360 | 1,641 pairs of duplicate customer records found, with no false match and none missed |
+| Laundering detection | On dates not used to tune the rules, 54.3% of laundering transfers raise an alert, and an alerted transfer is 20.7 times more likely to be laundering than the average transfer. Alert precision is 9.7%: about one alert in ten holds a laundering transfer, the usual order for rule-based monitoring, where analysts triage every alert ([per rule](docs/pipeline.md#gold)) |
+| Sanctions screening | Known-answer test: all 40 customers seeded with listed names are found, each on the right entry; 49 other customers share a listed name (precision 0.45) |
+| Customer 360 | Known-answer test: all 1,641 seeded pairs of duplicate customer records are found, with no false match |
 | Reproducibility | The 19 derived tables rebuild from raw data identical to the published ones |
 | Injected file format change | Day held 1 minute 31 seconds after the file was read, with the file and the violated field named; published 3 minutes 14 seconds after the corrected redelivery ([postmortem](docs/postmortems/card-date-format.md)) |
 
@@ -103,8 +103,11 @@ reporting tool.
 | Sanctions | UN Security Council consolidated list and OFAC SDN list (XML) | about 1,000 and 19,500 entries |
 
 Each source has a contract in [contracts/](contracts) (Open Data Contract
-Standard v3.1). Labels used to measure detection quality are kept outside the
-platform ([ADR 0004](docs/adr/0004-source-feeds-and-data-contracts.md)).
+Standard v3.1). Customer master data is derived from the IBM account holders
+with a fixed seed; it carries seeded duplicate records and 40 customers named
+after listed persons, as test cases for the customer 360 and the sanctions
+screening. Labels used to measure detection quality, including those seeded
+cases, are kept outside the platform ([ADR 0004](docs/adr/0004-source-feeds-and-data-contracts.md)).
 
 ## Stack
 
@@ -198,6 +201,9 @@ rejected file itself, 91 seconds after it is read
   none.
 - The laundering label covers the payments typologies only: structuring and
   customer-country rules are not measured by it.
+- Sanctions screening and customer 360 are scored on seeded cases with a known
+  answer. The scores show the matching logic works on the cases it was built
+  for; they are not a measure of performance on real customer data.
 - Failed runs show in Airflow; nothing pages the person on duty.
 
 ## Repository layout
@@ -217,3 +223,7 @@ transform/           dbt project: silver, gold and observability models, tests, 
 tests/unit/          fast tests, no containers
 tests/integration/   tests against the running stack
 ```
+
+## License
+
+[MIT](LICENSE)

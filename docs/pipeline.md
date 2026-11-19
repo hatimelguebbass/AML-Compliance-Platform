@@ -154,7 +154,7 @@ make gold                         # AML rules and sanctions screening on etl, on
 make gold DATE=2022-09-05         # one business date
 make evaluate-rules               # precision and recall of each rule against the laundering label
 make evaluate-rules FROM=2022-09-06 UNTIL=2022-09-10   # validation dates only
-make evaluate-sanctions           # precision and recall of the screening against the planted customers
+make evaluate-sanctions           # precision and recall of the screening against the seeded customers
 ```
 
 | Table | Content |
@@ -189,7 +189,7 @@ the first dates have little account history behind them.
 Alert precision is the share of alerts holding at least one labelled transfer;
 recall and lift are computed on transfers. The label does not cover structuring or
 customer countries, so AML-006 and AML-007 cannot be judged by it. Sanctions
-screening hits all 40 customers planted on the lists, on the right entry, and 49
+screening hits all 40 customers seeded with listed names, on the right entry, and 49
 other customers who share a listed name (precision 0.45). Gold for one business
 date builds in about 25 seconds; the 18 dates in about 5 minutes 30 seconds.
 
