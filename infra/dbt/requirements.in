@@ -1,0 +1,3 @@
+# dbt and its Trino adapter, as pinned in requirements.txt (`make dbt-lock`).
+dbt-core==1.11.17
+dbt-trino==1.11.0

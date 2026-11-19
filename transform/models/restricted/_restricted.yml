@@ -1,0 +1,54 @@
+models:
+  - name: customer_identity
+    description: >
+      Direct identifiers of the customers the core banking holds today. Restricted to
+      compliance (Trino access rules, ADR 0008); every other layer refers to customer_id only.
+    columns:
+      - name: customer_id
+        data_type: bigint
+        data_tests: [unique, not_null]
+      - name: customer_type
+        data_type: varchar
+      - name: first_name
+        data_type: varchar
+      - name: last_name
+        data_type: varchar
+      - name: legal_name
+        data_type: varchar
+      - name: full_name
+        description: Legal name of an organization, first and last name of a person.
+        data_type: varchar
+        data_tests: [not_null]
+      - name: full_name_key
+        description: Full name in upper case, without accents, spaces or punctuation; the matching key.
+        data_type: varchar
+      - name: birth_date
+        data_type: date
+      - name: id_document_type
+        data_type: varchar
+      - name: id_document_number
+        description: As keyed in at the branch.
+        data_type: varchar
+      - name: id_document_key
+        description: Document number in upper case, letters and digits only.
+        data_type: varchar
+      - name: tax_id
+        data_type: varchar
+      - name: nationality
+        data_type: varchar
+      - name: address_line
+        data_type: varchar
+      - name: city
+        data_type: varchar
+      - name: city_key
+        data_type: varchar
+      - name: postal_code
+        data_type: varchar
+      - name: phone
+        data_type: varchar
+      - name: email
+        data_type: varchar
+      - name: _pipeline_run_id
+        data_type: varchar
+      - name: _loaded_at
+        data_type: timestamp(6)

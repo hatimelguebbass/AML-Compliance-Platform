@@ -1,0 +1,186 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: sanctions-lists
+name: UN and OFAC sanctions lists
+version: 1.1.0
+status: active
+domain: compliance
+description:
+  purpose: >-
+    The UN Security Council consolidated list and the OFAC SDN list, landed as
+    published, for sanctions screening of customers and payment counterparties.
+  limitations: >-
+    Names are transliterated by the publisher, and the same person can appear on
+    both lists under different spellings. Each download is a full snapshot.
+    UN dates follow xs:date and may carry a zone offset.
+  usage: >-
+    A download is landed only if the XML parses, the entry count reaches the
+    minimum, matches the count declared by the publisher (OFAC) and has not dropped
+    by more than 10% against the previous snapshot. An unchanged file is not landed twice.
+team:
+  name: compliance
+servers:
+  - server: un
+    type: api
+    environment: prod
+    location: https://scsanctions.un.org/resources/xml/en/consolidated.xml
+  - server: ofac
+    type: api
+    environment: prod
+    location: https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.XML
+  - server: landing
+    type: local
+    environment: dev
+    path: data/landing/sanctions/<un|ofac>/<list>_<retrieved YYYYMMDDTHHMMSSZ>.xml
+    format: xml
+slaProperties:
+  - property: frequency
+    value: 1
+    unit: d
+    description: Downloaded daily before screening; the publishers update without notice.
+customProperties:
+  - property: minimumEntries
+    value: "un: 500, ofac: 5000"
+  - property: completenessSignal
+    value: <file>.manifest.json with entry count, SHA-256, publication date and source URL.
+schema:
+  - name: un_individual
+    physicalType: xml element
+    physicalName: CONSOLIDATED_LIST/INDIVIDUALS/INDIVIDUAL
+    properties:
+      - {name: REFERENCE_NUMBER, logicalType: string, physicalType: text, required: true, primaryKey: true, primaryKeyPosition: 1}
+      - {name: FIRST_NAME, logicalType: string, physicalType: text, required: true}
+      - {name: SECOND_NAME, logicalType: string, physicalType: text}
+      - {name: THIRD_NAME, logicalType: string, physicalType: text}
+      - {name: FOURTH_NAME, logicalType: string, physicalType: text}
+      - {name: NAME_ORIGINAL_SCRIPT, logicalType: string, physicalType: text}
+      - {name: UN_LIST_TYPE, logicalType: string, physicalType: text, required: true}
+      - name: LISTED_ON
+        logicalType: string
+        physicalType: xs:date
+        required: true
+        logicalTypeOptions:
+          pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}([+-][0-9]{2}:[0-9]{2}|Z)?$'
+        description: >-
+          Calendar date, sometimes with the zone offset xs:date allows (2001-01-25-05:00).
+          Kept as published; the date is its first ten characters, the offset carries no meaning for a listing date.
+      - name: INDIVIDUAL_ALIAS
+        logicalType: array
+        physicalType: repeated element
+        description: Present once and empty when the person has no alias.
+        items:
+          logicalType: object
+          properties:
+            - {name: QUALITY, logicalType: string, description: "Good or Low: how reliable the alias is for identification"}
+            - {name: ALIAS_NAME, logicalType: string}
+      - name: INDIVIDUAL_DATE_OF_BIRTH
+        logicalType: array
+        physicalType: repeated element
+        description: Exact date, a year, or a range of years depending on TYPE_OF_DATE.
+        items:
+          logicalType: object
+          properties:
+            - {name: TYPE_OF_DATE, logicalType: string, description: "EXACT, APPROXIMATELY or BETWEEN"}
+            - {name: DATE, logicalType: string, physicalType: yyyy-MM-dd}
+            - {name: YEAR, logicalType: string}
+            - {name: FROM_YEAR, logicalType: string}
+            - {name: TO_YEAR, logicalType: string}
+      - name: NATIONALITY
+        logicalType: object
+        physicalType: element
+        properties:
+          - name: VALUE
+            logicalType: array
+            physicalType: repeated element
+            items: {logicalType: string}
+  - name: un_entity
+    physicalType: xml element
+    physicalName: CONSOLIDATED_LIST/ENTITIES/ENTITY
+    properties:
+      - {name: REFERENCE_NUMBER, logicalType: string, physicalType: text, required: true, primaryKey: true, primaryKeyPosition: 1}
+      - {name: FIRST_NAME, logicalType: string, physicalType: text, required: true, description: Entity name}
+      - {name: NAME_ORIGINAL_SCRIPT, logicalType: string, physicalType: text}
+      - {name: UN_LIST_TYPE, logicalType: string, physicalType: text, required: true}
+      - name: LISTED_ON
+        logicalType: string
+        physicalType: xs:date
+        required: true
+        logicalTypeOptions:
+          pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}([+-][0-9]{2}:[0-9]{2}|Z)?$'
+        description: >-
+          Calendar date, sometimes with the zone offset xs:date allows (2001-01-25-05:00).
+          Kept as published; the date is its first ten characters, the offset carries no meaning for a listing date.
+      - name: ENTITY_ALIAS
+        logicalType: array
+        physicalType: repeated element
+        items:
+          logicalType: object
+          properties:
+            - {name: QUALITY, logicalType: string}
+            - {name: ALIAS_NAME, logicalType: string}
+  - name: ofac_sdn_entry
+    physicalType: xml element
+    physicalName: sdnList/sdnEntry
+    properties:
+      - {name: uid, logicalType: integer, physicalType: integer, required: true, primaryKey: true, primaryKeyPosition: 1}
+      - {name: firstName, logicalType: string, physicalType: text}
+      - {name: lastName, logicalType: string, physicalType: text, required: true, description: "Surname, or full name of an entity"}
+      - name: sdnType
+        logicalType: string
+        physicalType: text
+        required: true
+        quality:
+          - metric: invalidValues
+            arguments:
+              validValues: [Individual, Entity, Vessel, Aircraft]
+            mustBe: 0
+      - name: programList
+        logicalType: object
+        physicalType: element
+        required: true
+        properties:
+          - name: program
+            logicalType: array
+            physicalType: repeated element
+            items: {logicalType: string}
+      - name: akaList
+        logicalType: object
+        physicalType: element
+        properties:
+          - name: aka
+            logicalType: array
+            physicalType: repeated element
+            items:
+              logicalType: object
+              properties:
+                - {name: uid, logicalType: integer}
+                - {name: type, logicalType: string, description: "a.k.a., f.k.a. or n.k.a."}
+                - {name: category, logicalType: string, description: strong or weak}
+                - {name: lastName, logicalType: string}
+                - {name: firstName, logicalType: string}
+      - name: dateOfBirthList
+        logicalType: object
+        physicalType: element
+        properties:
+          - name: dateOfBirthItem
+            logicalType: array
+            physicalType: repeated element
+            items:
+              logicalType: object
+              properties:
+                - {name: uid, logicalType: integer}
+                - {name: dateOfBirth, logicalType: string, description: "Free text: 10 Dec 1948, 1948, circa 1960"}
+                - {name: mainEntry, logicalType: boolean}
+      - name: nationalityList
+        logicalType: object
+        physicalType: element
+        properties:
+          - name: nationality
+            logicalType: array
+            physicalType: repeated element
+            items:
+              logicalType: object
+              properties:
+                - {name: uid, logicalType: integer}
+                - {name: country, logicalType: string}
+                - {name: mainEntry, logicalType: boolean}

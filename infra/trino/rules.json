@@ -1,0 +1,20 @@
+{
+  "catalogs": [
+    {"user": "trino|dbt", "catalog": "corebanking", "allow": "read-only"},
+    {"catalog": "corebanking", "allow": "none"},
+    {"user": "trino|dbt|integration-test", "allow": "all"},
+    {"user": "compliance|analyst|bi", "catalog": "lakehouse|system", "allow": "read-only"},
+    {"allow": "none"}
+  ],
+  "schemas": [
+    {"user": "trino|dbt|integration-test", "owner": true},
+    {"owner": false}
+  ],
+  "tables": [
+    {"user": "trino|dbt|integration-test", "privileges": ["SELECT", "INSERT", "DELETE", "UPDATE", "OWNERSHIP", "GRANT_SELECT"]},
+    {"user": "analyst|bi", "catalog": "lakehouse", "schema": "restricted", "privileges": []},
+    {"user": "analyst", "catalog": "lakehouse", "schema": "gold", "privileges": []},
+    {"user": "compliance|analyst|bi", "catalog": "lakehouse|system", "privileges": ["SELECT"]},
+    {"privileges": []}
+  ]
+}

@@ -1,0 +1,153 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: card-processor-transactions
+name: Card processor transactions
+version: 1.1.0
+status: active
+domain: cards
+description:
+  purpose: >-
+    Authorisations and presentments of the bank's debit cards (ATM withdrawals,
+    POS and e-commerce purchases, refunds) sent daily by the card processor.
+  limitations: >-
+    About 3% of the records of a file are late presentments dated the previous day.
+    Cards are identified by processor token only; the PAN is never delivered.
+    Declined transactions are included, with an empty auth_code.
+  usage: Ingested into bronze after the header and trailer controls pass.
+team:
+  name: card-operations
+servers:
+  - server: landing
+    type: local
+    environment: dev
+    path: data/landing/cards/CARDTXN_*.dat
+    format: custom
+slaProperties:
+  - property: frequency
+    value: 1
+    unit: d
+  - property: latency
+    value: 4
+    unit: h
+    description: The file for business date D is delivered by D+1 04:00.
+customProperties:
+  - property: fileNamePattern
+    value: CARDTXN_<YYYYMMDD>_<sequence 001-999>.dat
+  - property: recordLayout
+    value: >-
+      Pipe-delimited ASCII, LF endings, no quoting. First field is the record type:
+      H (header, exactly one, first line), D (detail), T (trailer, exactly one, last line).
+  - property: header
+    value: H|CARDTXN|<format version 01>|<processor code>|<business date YYYYMMDD>|<sequence>|<created YYYYMMDDHHMMSS>
+  - property: trailer
+    value: T|<number of D records>|<sum of amount_minor over D records>
+  - property: completenessSignal
+    value: >-
+      The trailer. A file without trailer, or whose trailer disagrees with its detail
+      records, is incomplete and must be rejected as a whole.
+schema:
+  - name: card_transaction
+    physicalType: file
+    physicalName: CARDTXN_<YYYYMMDD>_<sequence>.dat (D records)
+    properties:
+      - name: record_type
+        logicalType: string
+        physicalType: char(1)
+        required: true
+        examples: [D]
+      - name: txn_ref
+        logicalType: string
+        physicalType: char(16)
+        primaryKey: true
+        primaryKeyPosition: 1
+        required: true
+        logicalTypeOptions:
+          pattern: '^[0-9]{16}$'
+        description: Processor reference, unique per transaction. A resent record repeats it.
+      - name: card_token
+        logicalType: string
+        physicalType: char(16)
+        required: true
+        classification: restricted
+        relationships:
+          - type: foreignKey
+            to: corebanking-customer-master.card.card_token
+      - name: txn_local_time
+        logicalType: timestamp
+        physicalType: char(14) YYYYMMDDHHMMSS, terminal local time
+        logicalTypeOptions:
+          format: yyyyMMddHHmmss
+        required: true
+      - name: txn_type
+        logicalType: string
+        physicalType: char(3)
+        required: true
+        description: WDL withdrawal, PUR purchase, REF refund.
+        quality:
+          - metric: invalidValues
+            arguments:
+              validValues: [WDL, PUR, REF]
+            mustBe: 0
+      - name: channel
+        logicalType: string
+        physicalType: varchar(4)
+        required: true
+        quality:
+          - metric: invalidValues
+            arguments:
+              validValues: [ATM, POS, ECOM]
+            mustBe: 0
+      - name: mcc
+        logicalType: string
+        physicalType: char(4)
+        required: true
+        description: ISO 18245 merchant category code.
+      - name: merchant_id
+        logicalType: string
+        physicalType: varchar(8)
+        required: true
+      - name: merchant_name
+        logicalType: string
+        physicalType: varchar(40)
+        required: true
+      - name: merchant_city
+        logicalType: string
+        physicalType: varchar(40)
+        required: true
+      - name: merchant_country
+        logicalType: string
+        physicalType: char(3)
+        required: true
+        description: ISO 3166-1 alpha-3.
+      - name: amount_minor
+        logicalType: integer
+        physicalType: bigint
+        required: true
+        description: Transaction amount in minor units of currency, always positive; txn_type gives the direction.
+      - name: currency
+        logicalType: string
+        physicalType: char(3)
+        required: true
+        description: ISO 4217 numeric code (504 MAD, 978 EUR, 840 USD).
+      - name: response_code
+        logicalType: string
+        physicalType: char(2)
+        required: true
+        description: 00 approved; any other value is a decline.
+      - name: auth_code
+        logicalType: string
+        physicalType: char(6)
+        required: false
+    quality:
+      - name: trailer_matches_details
+        type: text
+        dimension: completeness
+        severity: error
+        description: Trailer count and amount total equal those of the D records.
+      - metric: duplicateValues
+        arguments:
+          properties: [txn_ref]
+        mustBe: 0
+        dimension: uniqueness
+        severity: warning
+        description: Resent records are dropped by txn_ref during ingestion, not rejected.

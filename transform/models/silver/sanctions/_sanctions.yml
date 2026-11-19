@@ -1,0 +1,70 @@
+models:
+  - name: sanctions_entry
+    description: Entries of the latest UN consolidated list and OFAC SDN list snapshots.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [list_name, entry_id]
+    columns:
+      - name: list_name
+        data_type: varchar
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [UN, OFAC]
+      - name: entry_id
+        data_type: varchar
+        data_tests: [not_null]
+      - name: entry_type
+        description: INDIVIDUAL or ENTITY; OFAC also lists VESSEL and AIRCRAFT.
+        data_type: varchar
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [INDIVIDUAL, ENTITY, VESSEL, AIRCRAFT]
+      - name: primary_name
+        data_type: varchar
+        data_tests: [not_null]
+      - name: programs
+        data_type: array(varchar)
+      - name: listed_on
+        data_type: date
+      - name: nationalities
+        data_type: array(varchar)
+      - name: list_published
+        data_type: varchar
+      - name: retrieved_at
+        data_type: timestamp(6) with time zone
+      - name: _pipeline_run_id
+        data_type: varchar
+      - name: _loaded_at
+        data_type: timestamp(6)
+
+  - name: sanctions_name
+    description: Every primary name and alias of the listed entries, with its screening key.
+    columns:
+      - name: list_name
+        data_type: varchar
+      - name: entry_id
+        data_type: varchar
+        data_tests: [not_null]
+      - name: entry_type
+        data_type: varchar
+      - name: name
+        data_type: varchar
+        data_tests: [not_null]
+      - name: name_type
+        data_type: varchar
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [PRIMARY, ALIAS]
+      - name: alias_quality
+        description: As published; UN GOOD or LOW, OFAC STRONG or WEAK.
+        data_type: varchar
+      - name: name_key
+        data_type: varchar
+      - name: _pipeline_run_id
+        data_type: varchar
+      - name: _loaded_at
+        data_type: timestamp(6)

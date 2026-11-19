@@ -1,0 +1,81 @@
+[project]
+name = "aml-platform"
+version = "0.1.0"
+description = "On-premise AML compliance data platform"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "defusedxml>=0.7,<1",
+    "httpx>=0.28,<1",
+    "jsonschema>=4.23,<5",
+    "psycopg[binary]>=3.2,<4",
+    "pyyaml>=6.0,<7",
+    "referencing>=0.36,<1",
+    "trino>=0.335,<1",
+]
+
+[project.scripts]
+aml-sources = "aml_platform.sources.cli:main"
+aml-cdc = "aml_platform.cdc.cli:main"
+aml-evaluate = "aml_platform.evaluation.cli:main"
+aml-reliability = "aml_platform.reliability.cli:main"
+aml-reporting = "aml_platform.reporting.cli:main"
+
+[dependency-groups]
+airflow = [
+    "apache-airflow==3.3.2",
+    "apache-airflow-providers-docker==4.5.9",
+    "types-docker>=7.2.0.20261102",
+]
+dev = [
+    "mypy>=1.16",
+    "pyspark-client==4.1.4",
+    "pytest>=8.3",
+    "ruff>=0.12",
+    "types-defusedxml>=0.7",
+    "types-jsonschema>=4.23",
+    "types-pyyaml>=6.0",
+]
+
+[tool.uv]
+# The DAG tests import Airflow and its Docker provider, pinned to the versions of the Airflow image.
+default-groups = ["dev", "airflow"]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aml_platform"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+# Imported by the Spark jobs, whose interpreter is the Spark image's Python 3.10.
+per-file-target-version = { "src/aml_platform/ingestion/**" = "py310", "src/aml_platform/contracts.py" = "py310", "src/aml_platform/sources/landing.py" = "py310", "src/aml_platform/cdc/topics.py" = "py310", "jobs/**" = "py310" }
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "PT"]
+
+[tool.ruff.lint.per-file-ignores]
+# Test table names are generated locally, never user input; integration tests drive docker compose with fixed arguments.
+"tests/**" = ["S101", "S603", "S607", "S608"]
+# Seeded pseudo-random generation is what makes the source data reproducible; it never produces secrets.
+"src/aml_platform/sources/{cards,corebanking,kyc_changes}.py" = ["S311"]
+
+[tool.mypy]
+strict = true
+files = ["src", "jobs", "dags"]
+
+[[tool.mypy.overrides]]
+# The Spark Connect client ships the PySpark API with inline annotations but without a py.typed marker.
+module = ["pyspark", "pyspark.*"]
+follow_untyped_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: needs the docker compose stack running (make up)",
+    "reporting: needs gold and observability published to main, read as Power BI does (make pipeline)",
+]

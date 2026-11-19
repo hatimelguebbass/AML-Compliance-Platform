@@ -1,0 +1,140 @@
+name: aml
+version: "1.0.0"
+config-version: 2
+profile: aml
+require-dbt-version: [">=1.11.0", "<1.12.0"]
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+clean-targets: ["target"]
+
+on-run-start:
+  - "{{ create_run_results_table() }}"
+on-run-end:
+  - "{{ record_run_results(results) }}"
+
+vars:
+  # The business date a pipeline run loads (YYYY-MM-DD). Dated models rebuild only that
+  # date; without it they rebuild every date present in bronze.
+  business_date: null
+  # The orchestrator run, recorded on every row written; defaults to the dbt invocation.
+  pipeline_run: null
+  bronze_schema: bronze
+  audit_schema: audit
+  # Customer records whose compacted full names are at least this similar (1 - Levenshtein
+  # distance / length) are the same person when birth date and city also agree.
+  name_similarity_threshold: 0.8
+  # Label propagation rounds of the party resolution; a test fails if they do not converge.
+  party_resolution_rounds: 4
+  # Amounts the AML rules compare are converted to this currency at the rates the payments
+  # hub applies (silver.fx_rate).
+  reporting_currency: USD
+  # Jurisdiction of the bank: its customers are not high risk for living in it.
+  home_country: MA
+  # Transaction monitoring rules. Parameters change through a reviewed commit, and the rule
+  # catalogue (gold.aml_rule) is rendered from this block, so what runs is what is documented.
+  # Values were set against the laundering label (ADR 0009); `make evaluate-rules` measures them.
+  aml_rules:
+    fan_in:
+      id: AML-001
+      name: Fan-in
+      typology: Gathering of funds
+      description: An account is credited by at least min_counterparties distinct accounts in one business day, in the payment formats listed.
+      parameters: {payment_formats: [ACH], min_counterparties: 3}
+    fan_out:
+      id: AML-002
+      name: Fan-out
+      typology: Scattering of funds
+      description: An account pays at least min_counterparties distinct accounts in one business day, in the payment formats listed.
+      parameters: {payment_formats: [ACH], min_counterparties: 5}
+    pass_through:
+      id: AML-003
+      name: Pass-through account
+      typology: Money mule, layering
+      description: >-
+        An account forwards a credit to a third party within window_hours, keeping at most
+        1 - min_forwarded_ratio of it, in the payment formats listed.
+      parameters: {payment_formats: [ACH], window_hours: 72, min_forwarded_ratio: 0.9}
+    round_trip:
+      id: AML-004
+      name: Round trip
+      typology: Layering
+      description: Funds an account sent come back from the same counterparty within window_hours.
+      parameters: {window_hours: 72}
+    volume_spike:
+      id: AML-005
+      name: Outgoing volume spike
+      typology: Unexpected activity
+      description: >-
+        An account pays out at least min_amount and at least min_multiple times its average
+        daily outflow of the previous lookback_days days, in which it paid out on at least
+        min_active_days days.
+      parameters: {lookback_days: 7, min_active_days: 2, min_multiple: 10, min_amount: 10000}
+    structuring:
+      id: AML-006
+      name: Structuring
+      typology: Threshold avoidance
+      description: >-
+        An account makes at least min_transfers payments in one business day, each between
+        band_ratio and 100% of threshold, in the reporting currency.
+      parameters: {threshold: 10000, band_ratio: 0.9, min_transfers: 2}
+    high_risk_jurisdiction:
+      id: AML-007
+      name: High-risk jurisdiction
+      typology: Geographic risk
+      description: >-
+        A customer resident in or national of a jurisdiction on a FATF list in force moves at
+        least min_amount through an account in one business day.
+      parameters: {min_amount: 10000}
+  # Sanctions screening: listed and customer names agreeing on every token of the shorter one
+  # must also cover this share of the longer one's tokens.
+  sanctions_min_token_coverage: 0.6
+  # Customer and listed names at least this similar (compacted keys) are a fuzzy hit.
+  sanctions_name_similarity_threshold: 0.9
+  # Data observability (ADR 0010). Each check compares the loaded date with its baseline:
+  # the previous baseline_days loaded dates of the dataset of the same kind (weekday or
+  # weekend) that are not acknowledged as anomalous (seed acknowledged_anomaly), and needs
+  # min_baseline_days of them.
+  observability:
+    baseline_days: 5
+    min_baseline_days: 2
+    # A day's record count outside [min_ratio, max_ratio] times the baseline median is an
+    # anomaly; a blocking one stops the publish until fixed or acknowledged.
+    volume:
+      silver.payment_transfer: {min_ratio: 0.5, max_ratio: 2.0, blocking: true}
+      silver.card_transaction: {min_ratio: 0.5, max_ratio: 2.0, blocking: true}
+      gold.aml_alert: {min_ratio: 0.25, max_ratio: 4.0, blocking: false}
+    # Population stability index from which a profiled dimension has drifted.
+    drift_threshold: 0.25
+    # Core banking changes committed this close to the capture watermark may not be captured yet.
+    reconciliation_grace_minutes: 5
+
+seeds:
+  aml:
+    +schema: reference
+
+models:
+  aml:
+    +on_table_exists: replace
+    +on_schema_change: fail
+    +contract:
+      enforced: true
+    silver:
+      +schema: silver
+      +materialized: table
+    restricted:
+      +schema: restricted
+      +materialized: table
+    gold:
+      +schema: gold
+      +materialized: table
+      rules:
+        # Inlined into the alert models: one query per run, nothing intermediate to store.
+        +materialized: ephemeral
+        +contract:
+          enforced: false
+    observability:
+      +schema: observability
+      +materialized: table

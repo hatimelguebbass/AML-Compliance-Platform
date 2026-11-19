@@ -1,0 +1,130 @@
+models:
+  - name: customer_match
+    description: >
+      Pairs of current customer records found to be the same party, lower customer_id first,
+      with every rule that links them. Rules: for persons, the same identity document with a
+      similar full name or the same birth date, or a similar full name with the same city and
+      birth date (also with day and month swapped); for organizations, the same tax id.
+    columns:
+      - name: customer_id
+        data_type: bigint
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('customer_identity')
+                field: customer_id
+      - name: matched_customer_id
+        data_type: bigint
+        data_tests: [not_null]
+      - name: match_rules
+        data_type: array(varchar)
+      - name: _pipeline_run_id
+        data_type: varchar
+      - name: _loaded_at
+        data_type: timestamp(6)
+
+  - name: party_member
+    description: The party of every current customer record. A party is identified by its lowest customer_id.
+    columns:
+      - name: customer_id
+        data_type: bigint
+        data_tests: [unique, not_null]
+      - name: party_id
+        data_type: bigint
+        data_tests: [not_null]
+      - name: party_size
+        description: Number of customer records of the party.
+        data_type: bigint
+      - name: _pipeline_run_id
+        data_type: varchar
+      - name: _loaded_at
+        data_type: timestamp(6)
+
+  - name: party
+    description: >
+      Customer 360: one row per party with the records, risk and accounts it holds across
+      them. The risk rating is the highest of its records.
+    columns:
+      - name: party_id
+        data_type: bigint
+        data_tests: [unique, not_null]
+      - name: customer_type
+        data_type: varchar
+        data_tests: [not_null]
+      - name: customer_ids
+        data_type: array(bigint)
+      - name: customer_count
+        data_type: bigint
+      - name: risk_rating
+        data_type: varchar
+        data_tests: [not_null]
+      - name: is_pep
+        data_type: boolean
+      - name: customer_since
+        data_type: date
+      - name: residence_countries
+        data_type: array(varchar)
+      - name: account_count
+        data_type: bigint
+      - name: active_account_count
+        data_type: bigint
+      - name: _pipeline_run_id
+        data_type: varchar
+      - name: _loaded_at
+        data_type: timestamp(6)
+
+unit_tests:
+  - name: customer_match_rules
+    description: >
+      Document numbers match whatever their formatting when the name or the birth date
+      agrees, persons match
+      on a similar name with a swapped birth date in the same city, organizations on their
+      tax id; a shared document with another name, a shared trade register number and a
+      different name on the same birth date and city are other parties.
+    model: customer_match
+    given:
+      - input: ref('customer_identity')
+        rows:
+          - {customer_id: 10, customer_type: PERSON, full_name_key: MOHAMEDELAMRANI, birth_date: 1985-03-07, id_document_type: CIN, id_document_key: AB123456, city_key: RABAT}
+          - {customer_id: 11, customer_type: PERSON, full_name_key: MOHAMMEDELAMRANI, birth_date: 1985-07-03, city_key: RABAT}
+          - {customer_id: 12, customer_type: PERSON, full_name_key: MOHAMEDELAMRANI, birth_date: 1990-01-01, id_document_type: CIN, id_document_key: AB123456, city_key: CASABLANCA}
+          - {customer_id: 14, customer_type: PERSON, full_name_key: KARIMTAZI, birth_date: 1970-05-05, id_document_type: CIN, id_document_key: AB123456, city_key: RABAT}
+          - {customer_id: 13, customer_type: PERSON, full_name_key: YOUSSEFBENNANI, birth_date: 1985-03-07, city_key: RABAT}
+          - {customer_id: 15, customer_type: PERSON, full_name_key: MERYEMELIDRISSI, birth_date: 1939-04-30, id_document_type: CIN, id_document_key: C798077, city_key: FES}
+          - {customer_id: 16, customer_type: PERSON, full_name_key: MARYAMIDRISSI, birth_date: 1939-04-30, id_document_type: CIN, id_document_key: C798077, city_key: FES}
+          - {customer_id: 20, customer_type: ORGANIZATION, full_name_key: ATLASTRANSPORTSARL, tax_id: "001234567890123", id_document_type: RC, id_document_key: "4521", city_key: RABAT}
+          - {customer_id: 21, customer_type: ORGANIZATION, full_name_key: STEATLASTRANSPORT, tax_id: "001234567890123", city_key: RABAT}
+          - {customer_id: 22, customer_type: ORGANIZATION, full_name_key: SAHARATEXTILESA, tax_id: "007455023227618", id_document_type: RC, id_document_key: "4521", city_key: FES}
+    expect:
+      rows:
+        - {customer_id: 10, matched_customer_id: 11}
+        - {customer_id: 10, matched_customer_id: 12}
+        - {customer_id: 15, matched_customer_id: 16}
+        - {customer_id: 20, matched_customer_id: 21}
+
+  - name: party_member_follows_chains_of_matches
+    description: Records linked through another record join one party, named after its lowest customer_id.
+    model: party_member
+    given:
+      - input: ref('customer_identity')
+        rows:
+          - {customer_id: 1}
+          - {customer_id: 2}
+          - {customer_id: 3}
+          - {customer_id: 4}
+          - {customer_id: 5}
+          - {customer_id: 6}
+      - input: ref('customer_match')
+        rows:
+          - {customer_id: 2, matched_customer_id: 3}
+          - {customer_id: 1, matched_customer_id: 3}
+          - {customer_id: 4, matched_customer_id: 6}
+    expect:
+      rows:
+        - {customer_id: 1, party_id: 1, party_size: 3}
+        - {customer_id: 2, party_id: 1, party_size: 3}
+        - {customer_id: 3, party_id: 1, party_size: 3}
+        - {customer_id: 4, party_id: 4, party_size: 2}
+        - {customer_id: 5, party_id: 5, party_size: 1}
+        - {customer_id: 6, party_id: 4, party_size: 2}

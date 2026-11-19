@@ -1,0 +1,30 @@
+# The daily DAG audits silver before building gold on it, so each layer is built and tested
+# on its own. Cautious indirect selection keeps a gold test that also reads silver out of
+# the silver audit; it runs with gold.
+selectors:
+  - name: silver
+    definition:
+      union:
+        - method: path
+          value: seeds
+          indirect_selection: cautious
+        - method: path
+          value: models/silver
+          indirect_selection: cautious
+        - method: path
+          value: models/restricted
+          indirect_selection: cautious
+        - method: path
+          value: tests/silver
+  - name: gold
+    definition:
+      union:
+        - method: path
+          value: models/gold
+        - method: path
+          value: tests/gold
+  - name: observability
+    definition:
+      union:
+        - method: path
+          value: models/observability

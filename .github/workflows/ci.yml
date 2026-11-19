@@ -1,0 +1,64 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: make lint
+      - run: make typecheck
+      - run: make test-unit
+      - name: Power BI project against its schemas and the dbt contracts
+        run: make bi-check
+      - name: Validate compose file
+        run: cp .env.example .env && docker compose --profile cdc --profile spark --profile dbt --profile airflow config --quiet
+      - name: Parse the dbt project
+        run: docker compose --profile dbt build dbt && docker compose --profile dbt run --rm --no-deps dbt parse
+
+  integration:
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: make up
+      - run: make up-cdc
+      - run: make up-airflow
+      - run: make test-integration
+      - run: make smoke-spark
+      # Silver, gold and observability on empty bronze tables: every model runs on Trino and matches its contract.
+      # Unit tests come after, since dbt reads the column types of each model's inputs from Trino.
+      - run: make bronze-tables
+      - run: make silver
+      - run: make gold
+      - run: make observability
+      - run: make test-dbt
+      # Power BI reads main: publish the empty tables, then read every imported column as bi over HTTPS.
+      - run: make publish
+      - run: make test-reporting
+      - name: Service logs on failure
+        if: failure()
+        run: docker compose --profile cdc --profile spark --profile airflow logs --no-color --tail 500
+      - if: always()
+        run: make reset

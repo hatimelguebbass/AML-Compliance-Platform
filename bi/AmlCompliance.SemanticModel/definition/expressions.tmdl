@@ -1,0 +1,23 @@
+/// Host of Trino's HTTPS listener.
+expression TrinoHost = "localhost" meta [IsParameterQuery = true, Type = "Text", IsParameterQueryRequired = true]
+	lineageTag: 5349b55e-d6db-5dc2-8093-e4d7a87f64b8
+
+	annotation PBI_ResultType = Text
+
+expression TrinoPort = 8443 meta [IsParameterQuery = true, Type = "Number", IsParameterQueryRequired = true]
+	lineageTag: 86436b88-e0d7-5e10-8b8f-25a0107cfbc9
+
+	annotation PBI_ResultType = Number
+
+/// The published lakehouse (Nessie main): reports never read the staging branch.
+expression Lakehouse =
+		let
+		    Source = Trino.Contents(TrinoHost, TrinoPort, "lakehouse"),
+		    Lakehouse = Source{[Name = "lakehouse"]}[Data]
+		in
+		    Lakehouse
+	lineageTag: 1ce160e0-7e1a-5e93-bbde-3e43ab478855
+
+	annotation PBI_ResultType = Table
+
+	annotation PBI_NavigationStepName = Navigation

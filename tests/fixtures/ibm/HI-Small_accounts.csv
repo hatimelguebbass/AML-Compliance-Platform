@@ -1,0 +1,10 @@
+Bank Name,Bank ID,Account Number,Entity ID,Entity Name
+First Bank #1,10,8000AAA10,800E00001,Sole Proprietorship #1
+First Bank #1,10,8000AAA11,800E00001,Sole Proprietorship #1
+First Bank #1,10,8000AAA12,800E00001,Sole Proprietorship #1
+Second Bank #2,220,8000BBB20,800E00002,Corporation #2
+Second Bank #2,220,8000BBB21,800E00002,Corporation #2
+Third Bank #3,3208,8000CCC30,800E00003,Individual #3
+Third Bank #3,3208,8000CCC31,800E00004,Partnership #4
+Third Bank #3,3208,8000CCC32,800E00005,Individual #5
+Third Bank #3,3208,8000CCC33,800E00006,Individual #6

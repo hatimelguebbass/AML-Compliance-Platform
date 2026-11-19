@@ -1,0 +1,44 @@
+sources:
+  - name: bronze
+    description: Raw copies of the source feeds and change logs, as ingested and audited (ADR 0005, 0006).
+    schema: "{{ var('bronze_schema') }}"
+    tables:
+      - name: payment_transfer
+        description: Payments hub transfers, one partition per business date.
+      - name: card_transaction
+        description: Card processor detail records, one partition per business date.
+      - name: corebanking_customer
+        description: Every captured version of core.customer rows.
+      - name: corebanking_account
+        description: Every captured version of core.account rows.
+      - name: corebanking_card
+        description: Every captured version of core.card rows.
+      - name: sanctions_un_individual
+        description: UN consolidated list individuals, one snapshot per retrieval.
+      - name: sanctions_un_entity
+        description: UN consolidated list entities, one snapshot per retrieval.
+      - name: sanctions_ofac_sdn_entry
+        description: OFAC SDN list entries, one snapshot per retrieval.
+
+  - name: audit
+    schema: "{{ var('audit_schema') }}"
+    tables:
+      - name: change_batch
+        description: One row per topic partition read by a change data capture run, with the business date it closes.
+      - name: ingestion_file
+        description: One row per landed file and target table processed by bronze ingestion, with its record counts.
+      - name: ingestion_run
+        description: One row per attempt of a Spark ingestion job.
+      - name: dbt_node_run
+        description: One row per node of each dbt invocation, written by the run hooks (macros/run_results.sql).
+
+  - name: corebanking
+    description: >
+      The core banking database, read through Trino's read-only corebanking catalog by a role
+      granted only the columns silver keeps (ADR 0010). Used to reconcile silver, never to build it.
+    database: corebanking
+    schema: core
+    tables:
+      - name: customer
+      - name: account
+      - name: card

@@ -1,0 +1,209 @@
+models:
+  - name: aml_rule
+    description: Transaction monitoring rules and the parameters they run with.
+    columns:
+      - name: rule_id
+        data_type: varchar
+        data_tests: [unique, not_null]
+      - name: rule_key
+        data_type: varchar
+        data_tests: [unique, not_null]
+      - name: rule_name
+        data_type: varchar
+      - name: typology
+        data_type: varchar
+      - name: description
+        data_type: varchar
+      - name: parameters
+        description: Rule parameters as a JSON object.
+        data_type: varchar
+      - name: _pipeline_run_id
+        data_type: varchar
+      - name: _loaded_at
+        data_type: timestamp(6)
+
+  - name: aml_alert_transfer
+    description: >
+      Transfers that made each alert fire, partitioned by the alert's business date. A
+      pass-through or round-trip alert also holds the earlier transfer it was matched to.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [alert_id, transfer_id]
+            loaded_dates_only: true
+    columns:
+      - name: alert_id
+        data_type: varchar
+        data_tests: [not_null]
+      - name: rule_id
+        data_type: varchar
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('aml_rule')
+                field: rule_id
+      - name: business_date
+        data_type: date
+        data_tests: [not_null]
+      - name: account_id
+        description: Account the alert is about.
+        data_type: bigint
+        data_tests: [not_null]
+      - name: transfer_id
+        data_type: varchar
+        data_tests: [not_null]
+      - name: evidence_role
+        description: DEBIT when the account paid, CREDIT when it was paid.
+        data_type: varchar
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [DEBIT, CREDIT]
+      - name: booked_at
+        data_type: timestamp(6)
+      - name: counterparty_account_id
+        data_type: bigint
+      - name: amount
+        description: Amount paid, in the reporting currency.
+        data_type: decimal(22,2)
+      - name: _pipeline_run_id
+        data_type: varchar
+      - name: _loaded_at
+        data_type: timestamp(6)
+
+  - name: aml_alert
+    description: >
+      One alert per rule, account and business date, with the customer as of that date for
+      triage. Amounts are in the reporting currency.
+    columns:
+      - name: alert_id
+        data_type: varchar
+        data_tests: [not_null, unique_in_loaded_dates]
+      - name: rule_id
+        data_type: varchar
+        data_tests: [not_null]
+      - name: business_date
+        data_type: date
+        data_tests: [not_null]
+      - name: account_id
+        data_type: bigint
+        data_tests: [not_null]
+      - name: customer_id
+        description: Holder of the account on the business date.
+        data_type: bigint
+        data_tests: [not_null]
+      - name: party_id
+        data_type: bigint
+        data_tests: [not_null]
+      - name: customer_risk_rating
+        description: KYC risk rating on the business date.
+        data_type: varchar
+        data_tests: [not_null]
+      - name: is_pep
+        data_type: boolean
+      - name: transfer_count
+        data_type: bigint
+      - name: counterparty_count
+        data_type: bigint
+      - name: credited_amount
+        data_type: decimal(38,2)
+      - name: debited_amount
+        data_type: decimal(38,2)
+      - name: first_booked_at
+        data_type: timestamp(6)
+      - name: last_booked_at
+        data_type: timestamp(6)
+      - name: _pipeline_run_id
+        data_type: varchar
+      - name: _loaded_at
+        data_type: timestamp(6)
+
+  - name: sanctions_hit
+    description: >
+      Current customers whose name matches a UN or OFAC listed name, one row per customer and
+      listed entry. Customer names stay in restricted.customer_identity.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [customer_id, list_name, entry_id]
+    columns:
+      - name: hit_id
+        data_type: varchar
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_type: bigint
+        data_tests: [not_null]
+      - name: party_id
+        data_type: bigint
+        data_tests: [not_null]
+      - name: list_name
+        data_type: varchar
+      - name: entry_id
+        data_type: varchar
+      - name: entry_type
+        data_type: varchar
+      - name: listed_name
+        data_type: varchar
+      - name: name_type
+        description: PRIMARY or ALIAS.
+        data_type: varchar
+      - name: match_type
+        description: >
+          EXACT (same compacted name), TOKENS (every token of the shorter name in the other,
+          covering enough of the longer one) or FUZZY (similar compacted names).
+        data_type: varchar
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [EXACT, TOKENS, FUZZY]
+      - name: name_similarity
+        description: 1 - Levenshtein distance / length of the longer compacted name.
+        data_type: double
+      - name: _pipeline_run_id
+        data_type: varchar
+      - name: _loaded_at
+        data_type: timestamp(6)
+
+unit_tests:
+  - name: sanctions_hits_tolerate_case_spacing_and_a_dropped_middle_name
+    description: >
+      Hits: the same name in another case (exact), a dropped middle name (tokens), a changed
+      vowel (fuzzy). Not hits: a weak alias unless exact, a person against an entity, two
+      names of three in common with another surname, and a short name covering too little
+      of the listed one.
+    model: sanctions_hit
+    given:
+      - input: ref('customer_identity')
+        rows:
+          - {customer_id: 1, customer_type: PERSON, full_name: Ali Karaki, full_name_key: ALIKARAKI}
+          - {customer_id: 2, customer_type: PERSON, full_name: Alireza Rahnavard, full_name_key: ALIREZARAHNAVARD}
+          - {customer_id: 3, customer_type: PERSON, full_name: Ahmed El Khatib, full_name_key: AHMEDELKHATIB}
+          - {customer_id: 4, customer_type: PERSON, full_name: Abu Omar, full_name_key: ABUOMAR}
+          - {customer_id: 5, customer_type: ORGANIZATION, full_name: Atlas Shipping, full_name_key: ATLASSHIPPING}
+          - {customer_id: 6, customer_type: PERSON, full_name: Karim Ali Bennani, full_name_key: KARIMALIBENNANI}
+          - {customer_id: 7, customer_type: PERSON, full_name: Ali Hassan, full_name_key: ALIHASSAN}
+          - {customer_id: 8, customer_type: PERSON, full_name: Omar Abu, full_name_key: OMARABU}
+      - input: ref('sanctions_name')
+        rows:
+          - {list_name: OFAC, entry_id: "27320", entry_type: INDIVIDUAL, name: Ali KARAKI, name_type: PRIMARY, name_key: ALIKARAKI}
+          - {list_name: OFAC, entry_id: "29102", entry_type: INDIVIDUAL, name: Alireza Mohammad RAHNAVARD, name_type: PRIMARY, name_key: ALIREZAMOHAMMADRAHNAVARD}
+          - {list_name: UN, entry_id: QDi.1, entry_type: INDIVIDUAL, name: Ahmad EL KHATIB, name_type: ALIAS, alias_quality: GOOD, name_key: AHMADELKHATIB}
+          - {list_name: UN, entry_id: QDi.2, entry_type: INDIVIDUAL, name: Abu Omar, name_type: ALIAS, alias_quality: LOW, name_key: ABUOMAR}
+          - {list_name: UN, entry_id: QDi.2, entry_type: INDIVIDUAL, name: Omar Abu Saleh, name_type: PRIMARY, name_key: OMARABUSALEH}
+          - {list_name: OFAC, entry_id: "500", entry_type: INDIVIDUAL, name: Atlas Shipping, name_type: PRIMARY, name_key: ATLASSHIPPING}
+          - {list_name: OFAC, entry_id: "600", entry_type: INDIVIDUAL, name: Karim Ali Tazi, name_type: PRIMARY, name_key: KARIMALITAZI}
+          - {list_name: OFAC, entry_id: "700", entry_type: INDIVIDUAL, name: Ali Hassan Mahmoud Youssef, name_type: PRIMARY, name_key: ALIHASSANMAHMOUDYOUSSEF}
+      - input: ref('party_member')
+        rows:
+          - {customer_id: 1, party_id: 1}
+          - {customer_id: 2, party_id: 2}
+          - {customer_id: 3, party_id: 3}
+          - {customer_id: 4, party_id: 4}
+          - {customer_id: 8, party_id: 4}
+    expect:
+      rows:
+        - {customer_id: 1, party_id: 1, list_name: OFAC, entry_id: "27320", match_type: EXACT}
+        - {customer_id: 2, party_id: 2, list_name: OFAC, entry_id: "29102", match_type: TOKENS}
+        - {customer_id: 3, party_id: 3, list_name: UN, entry_id: QDi.1, match_type: FUZZY}
+        - {customer_id: 4, party_id: 4, list_name: UN, entry_id: QDi.2, match_type: EXACT}
+        - {customer_id: 8, party_id: 4, list_name: UN, entry_id: QDi.2, match_type: TOKENS}

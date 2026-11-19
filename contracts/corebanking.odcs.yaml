@@ -1,0 +1,97 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: corebanking-customer-master
+name: Core banking customer master
+version: 1.0.0
+status: active
+domain: customer
+description:
+  purpose: KYC records of every customer, their accounts and debit cards.
+  limitations: >-
+    One party can own several customer records (created at different branches)
+    with spelling, ID formatting or date differences; resolving them is the job
+    of the customer 360. bank_id is stored without leading zeros.
+  usage: >-
+    Captured by change data capture from the write-ahead log, never by queries on
+    updated_at. Personal data falls under law 09-08 and is pseudonymised beyond silver.
+team:
+  name: core-banking
+servers:
+  - server: source-db
+    type: postgresql
+    environment: dev
+    host: localhost
+    port: 5432
+    database: corebanking
+    schema: core
+schema:
+  - name: customer
+    physicalType: table
+    physicalName: core.customer
+    properties:
+      - {name: customer_id, logicalType: integer, physicalType: bigint, primaryKey: true, primaryKeyPosition: 1, required: true}
+      - {name: customer_type, logicalType: string, physicalType: text, required: true, description: PERSON or ORGANIZATION}
+      - {name: first_name, logicalType: string, physicalType: text, classification: confidential}
+      - {name: last_name, logicalType: string, physicalType: text, classification: confidential}
+      - {name: gender, logicalType: string, physicalType: char(1)}
+      - {name: birth_date, logicalType: date, physicalType: date, classification: confidential}
+      - {name: legal_name, logicalType: string, physicalType: text}
+      - {name: legal_form, logicalType: string, physicalType: text, description: "SA, SARL, SARL_AU, SNC, SCS or EP"}
+      - {name: incorporation_date, logicalType: date, physicalType: date}
+      - {name: id_document_type, logicalType: string, physicalType: text, description: "CIN, PASSPORT or RC"}
+      - {name: id_document_number, logicalType: string, physicalType: text, classification: confidential}
+      - {name: tax_id, logicalType: string, physicalType: text, description: ICE of an organization (15 digits)}
+      - {name: nationality, logicalType: string, physicalType: char(2), description: ISO 3166-1 alpha-2}
+      - {name: residence_country, logicalType: string, physicalType: char(2), required: true}
+      - {name: occupation, logicalType: string, physicalType: text}
+      - {name: address_line, logicalType: string, physicalType: text, required: true, classification: confidential}
+      - {name: city, logicalType: string, physicalType: text, required: true}
+      - {name: postal_code, logicalType: string, physicalType: text, required: true}
+      - {name: phone, logicalType: string, physicalType: text, classification: confidential}
+      - {name: email, logicalType: string, physicalType: text, classification: confidential}
+      - {name: risk_rating, logicalType: string, physicalType: text, required: true, description: "LOW, MEDIUM or HIGH"}
+      - {name: is_pep, logicalType: boolean, physicalType: boolean, required: true, description: Politically exposed person}
+      - {name: customer_since, logicalType: date, physicalType: date, required: true}
+      - {name: created_at, logicalType: timestamp, physicalType: timestamptz, required: true}
+      - {name: updated_at, logicalType: timestamp, physicalType: timestamptz, required: true, description: Maintained by trigger}
+  - name: account
+    physicalType: table
+    physicalName: core.account
+    properties:
+      - {name: account_id, logicalType: integer, physicalType: bigint, primaryKey: true, primaryKeyPosition: 1, required: true}
+      - name: customer_id
+        logicalType: integer
+        physicalType: bigint
+        required: true
+        relationships:
+          - {type: foreignKey, to: customer.customer_id}
+      - {name: bank_id, logicalType: string, physicalType: text, required: true}
+      - {name: account_number, logicalType: string, physicalType: text, required: true, description: "Unique together with bank_id; joins the payments feed"}
+      - {name: rib, logicalType: string, physicalType: char(24), required: true, unique: true, description: "Bank code, locality, account number and mod-97 key"}
+      - {name: account_type, logicalType: string, physicalType: text, required: true, description: CURRENT or SAVINGS}
+      - {name: currency, logicalType: string, physicalType: char(3), required: true}
+      - {name: status, logicalType: string, physicalType: text, required: true, description: "ACTIVE, DORMANT or CLOSED"}
+      - {name: opened_on, logicalType: date, physicalType: date, required: true}
+      - {name: closed_on, logicalType: date, physicalType: date}
+      - {name: created_at, logicalType: timestamp, physicalType: timestamptz, required: true}
+      - {name: updated_at, logicalType: timestamp, physicalType: timestamptz, required: true}
+  - name: card
+    physicalType: table
+    physicalName: core.card
+    properties:
+      - {name: card_id, logicalType: integer, physicalType: bigint, primaryKey: true, primaryKeyPosition: 1, required: true}
+      - name: account_id
+        logicalType: integer
+        physicalType: bigint
+        required: true
+        relationships:
+          - {type: foreignKey, to: account.account_id}
+      - {name: card_token, logicalType: string, physicalType: char(16), required: true, unique: true, classification: restricted}
+      - {name: scheme, logicalType: string, physicalType: text, required: true}
+      - {name: pan_last4, logicalType: string, physicalType: char(4), required: true}
+      - {name: product, logicalType: string, physicalType: text, required: true}
+      - {name: status, logicalType: string, physicalType: text, required: true, description: "ACTIVE, BLOCKED or EXPIRED"}
+      - {name: issued_on, logicalType: date, physicalType: date, required: true}
+      - {name: expires_on, logicalType: date, physicalType: date, required: true}
+      - {name: created_at, logicalType: timestamp, physicalType: timestamptz, required: true}
+      - {name: updated_at, logicalType: timestamp, physicalType: timestamptz, required: true}

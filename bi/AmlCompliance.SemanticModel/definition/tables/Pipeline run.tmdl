@@ -1,0 +1,99 @@
+/// One row per pipeline run and step (observability.pipeline_run).
+table 'Pipeline run'
+	lineageTag: e6d8ee86-b32b-527e-a554-73394155118a
+
+	/// Time spent in the pipeline steps.
+	measure 'Pipeline minutes' = DIVIDE ( SUM ( 'Pipeline run'[Duration (s)] ), 60 )
+		formatString: #,0.0
+		lineageTag: 734ba187-9da3-552a-8ec7-410e3e2442ff
+
+	measure 'Failed steps' = CALCULATE ( COUNTROWS ( 'Pipeline run' ), 'Pipeline run'[Status] = "FAILED" )
+		formatString: #,0
+		lineageTag: 1e6c57da-69c4-547b-9c0f-a62f54803dce
+
+	column 'Pipeline run ID'
+		dataType: string
+		lineageTag: 78f507d9-e559-5e1d-a1ab-9e02ad30b0f7
+		summarizeBy: none
+		sourceColumn: pipeline_run_id
+
+	column 'Business date'
+		dataType: dateTime
+		formatString: yyyy-mm-dd
+		lineageTag: 49359206-5fd9-5b49-92cd-eecc7e285334
+		summarizeBy: none
+		sourceColumn: business_date
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column Step
+		dataType: string
+		lineageTag: fb0f6d07-74e0-5b52-9885-622b32140775
+		summarizeBy: none
+		sourceColumn: step
+
+	column Engine
+		dataType: string
+		lineageTag: 8aca81bc-7025-597b-958f-8b71af447877
+		summarizeBy: none
+		sourceColumn: engine
+
+	column Attempts
+		dataType: int64
+		formatString: 0
+		lineageTag: 02058d42-991e-50ff-a750-cec091d064a7
+		summarizeBy: none
+		sourceColumn: attempts
+
+	column 'Started at'
+		dataType: dateTime
+		formatString: yyyy-mm-dd hh:nn:ss
+		lineageTag: e7e20278-88e4-5c78-b81d-d801e2ad9884
+		summarizeBy: none
+		sourceColumn: started_at
+
+	column 'Duration (s)'
+		dataType: double
+		formatString: #,0.0
+		lineageTag: 0dbcc404-ab54-569b-8813-b199259d27db
+		summarizeBy: none
+		sourceColumn: duration_seconds
+
+	column 'Records written'
+		dataType: int64
+		formatString: #,0
+		lineageTag: ace2e0a4-9135-58d2-94f1-e7d8ed59ab6a
+		summarizeBy: none
+		sourceColumn: records_written
+
+	column Nodes
+		dataType: int64
+		formatString: 0
+		lineageTag: 9d1c5230-7bf3-5ee7-b110-e8e952067e67
+		summarizeBy: none
+		sourceColumn: nodes
+
+	column 'Failed nodes'
+		dataType: int64
+		formatString: 0
+		lineageTag: fef33410-f46a-55f2-b5e7-053c3a98d82a
+		summarizeBy: none
+		sourceColumn: failed_nodes
+
+	column Status
+		dataType: string
+		lineageTag: 3f7446f0-ea27-5b8d-9dbc-817e2205f016
+		summarizeBy: none
+		sourceColumn: status
+
+	partition 'Pipeline run' = m
+		mode: import
+		source =
+				let
+				    Source = Lakehouse{[Name = "observability"]}[Data]{[Name = "observability.pipeline_run"]}[Data],
+				    Columns = Table.SelectColumns(Source, {"pipeline_run_id", "business_date", "step", "engine", "attempts", "started_at", "duration_seconds", "records_written", "nodes", "failed_nodes", "status"}),
+				    Typed = Table.TransformColumnTypes(Columns, {{"pipeline_run_id", type text}, {"business_date", type date}, {"step", type text}, {"engine", type text}, {"attempts", Int64.Type}, {"started_at", type datetime}, {"duration_seconds", type number}, {"records_written", Int64.Type}, {"nodes", Int64.Type}, {"failed_nodes", Int64.Type}, {"status", type text}})
+				in
+				    Typed
+
+	annotation PBI_ResultType = Table

@@ -1,0 +1,28 @@
+<?xml version="1.0" standalone="yes"?>
+<sdnList xmlns="https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/XML">
+  <publshInformation>
+    <Publish_Date>11/09/2026</Publish_Date>
+    <Record_Count>3</Record_Count>
+  </publshInformation>
+  <sdnEntry>
+    <uid>100</uid>
+    <lastName>EXAMPLE SHIPPING CO</lastName>
+    <sdnType>Entity</sdnType>
+    <programList><program>SDGT</program></programList>
+    <akaList><aka><uid>9001</uid><type>a.k.a.</type><category>strong</category><lastName>EX SHIP</lastName></aka></akaList>
+  </sdnEntry>
+  <sdnEntry>
+    <uid>200</uid>
+    <firstName>Omar</firstName>
+    <lastName>FAROUK</lastName>
+    <sdnType>Individual</sdnType>
+    <programList><program>SDGT</program></programList>
+  </sdnEntry>
+  <sdnEntry>
+    <uid>300</uid>
+    <firstName>Li</firstName>
+    <lastName>WEI-MING</lastName>
+    <sdnType>Individual</sdnType>
+    <programList><program>CYBER2</program></programList>
+  </sdnEntry>
+</sdnList>

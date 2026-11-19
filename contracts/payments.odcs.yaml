@@ -1,0 +1,125 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: payments-hub-transfers
+name: Payments hub transfers
+version: 1.1.0
+status: active
+domain: payments
+description:
+  purpose: >-
+    Every transfer booked by the payments hub (ACH, wire, cheque, card, cash, crypto),
+    one file per business date. Primary input of transaction monitoring.
+  limitations: >-
+    Bank identifiers are zero-padded strings whose width varies for the same bank
+    (010 and 0010 are one bank); compare them after stripping leading zeros.
+    Timestamps are bank local time without zone and have minute precision.
+  usage: Ingested into bronze as delivered; never edited at the source.
+team:
+  name: payments-operations
+servers:
+  - server: landing
+    type: local
+    environment: dev
+    path: data/landing/payments/PAYMENTS_*.csv
+    format: csv
+slaProperties:
+  - property: frequency
+    value: 1
+    unit: d
+    element: payment_transfer.booked_at
+  - property: latency
+    value: 6
+    unit: h
+    description: The file for business date D is complete by D+1 06:00.
+customProperties:
+  - property: fileNamePattern
+    value: PAYMENTS_<YYYYMMDD>.csv
+  - property: completenessSignal
+    value: >-
+      <file>.manifest.json is written after the data file and holds its record count
+      and SHA-256. A file without manifest is still being delivered.
+  - property: encoding
+    value: UTF-8, comma-delimited, one header row, LF line endings
+schema:
+  - name: payment_transfer
+    physicalType: file
+    physicalName: PAYMENTS_<YYYYMMDD>.csv
+    properties:
+      - name: transfer_id
+        logicalType: string
+        physicalType: char(12)
+        primaryKey: true
+        primaryKeyPosition: 1
+        required: true
+        unique: true
+        logicalTypeOptions:
+          pattern: '^TRF[0-9]{9}$'
+        examples: [TRF000000001]
+      - name: booked_at
+        logicalType: timestamp
+        physicalType: timestamp without time zone (ISO 8601)
+        logicalTypeOptions:
+          format: yyyy-MM-dd'T'HH:mm:ss
+        required: true
+        examples: ["2022-09-01T00:20:00"]
+      - name: originator_bank_id
+        logicalType: string
+        physicalType: varchar(10)
+        required: true
+      - name: originator_account
+        logicalType: string
+        physicalType: varchar(16)
+        required: true
+      - name: beneficiary_bank_id
+        logicalType: string
+        physicalType: varchar(10)
+        required: true
+      - name: beneficiary_account
+        logicalType: string
+        physicalType: varchar(16)
+        required: true
+      - name: amount_paid
+        logicalType: number
+        physicalType: decimal(22,6)
+        required: true
+        description: Amount debited from the originator, in payment_currency.
+      - name: payment_currency
+        logicalType: string
+        physicalType: char(3)
+        required: true
+        description: ISO 4217 code; XBT for bitcoin.
+        quality:
+          - metric: invalidValues
+            arguments:
+              validValues: [AUD, BRL, CAD, CHF, CNY, EUR, GBP, ILS, INR, JPY, MXN, RUB, SAR, USD, XBT]
+            mustBe: 0
+      - name: amount_received
+        logicalType: number
+        physicalType: decimal(22,6)
+        required: true
+        description: Amount credited to the beneficiary, in receiving_currency.
+      - name: receiving_currency
+        logicalType: string
+        physicalType: char(3)
+        required: true
+      - name: payment_format
+        logicalType: string
+        physicalType: varchar(16)
+        required: true
+        quality:
+          - metric: invalidValues
+            arguments:
+              validValues: [ACH, BITCOIN, CASH, CHEQUE, CREDIT_CARD, REINVESTMENT, WIRE]
+            mustBe: 0
+    quality:
+      - name: record_count_matches_manifest
+        type: text
+        dimension: completeness
+        severity: error
+        description: Row count equals record_count in the manifest; otherwise the file is quarantined.
+      - metric: duplicateValues
+        arguments:
+          properties: [transfer_id]
+        mustBe: 0
+        dimension: uniqueness
+        severity: error

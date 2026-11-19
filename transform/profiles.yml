@@ -1,0 +1,18 @@
+# dbt only ever writes the staging branch: readers see its work once the audited branch is
+# merged into main (write-audit-publish, ADR 0001).
+aml:
+  target: etl
+  outputs:
+    etl:
+      type: trino
+      method: none
+      user: dbt
+      host: "{{ env_var('TRINO_HOST', 'trino') }}"
+      port: "{{ env_var('TRINO_PORT', '8080') | as_number }}"
+      http_scheme: http
+      catalog: lakehouse_etl
+      schema: silver
+      # Two rewrites of the large dated tables at once exceed Trino's 1.2 GB heap.
+      threads: 1
+      session_properties:
+        query_max_run_time: 30m

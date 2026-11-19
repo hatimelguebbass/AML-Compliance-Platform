@@ -1,0 +1,58 @@
+models:
+  - name: card_transaction
+    description: >
+      Card processor transactions in major units, with the card and account they belong to,
+      partitioned by business date. A pipeline run replaces its business date.
+    columns:
+      - name: txn_ref
+        data_type: varchar
+        data_tests: [not_null, unique_in_loaded_dates]
+      - name: business_date
+        data_type: date
+        data_tests: [not_null]
+      - name: txn_local_at
+        description: Terminal local time, zone not delivered.
+        data_type: timestamp(6)
+      - name: txn_type
+        data_type: varchar
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [WDL, PUR, REF]
+      - name: channel
+        data_type: varchar
+      - name: card_id
+        data_type: bigint
+      - name: account_id
+        data_type: bigint
+      - name: card_token
+        data_type: varchar
+      - name: mcc
+        data_type: varchar
+      - name: merchant_id
+        data_type: varchar
+      - name: merchant_name
+        data_type: varchar
+      - name: merchant_city
+        data_type: varchar
+      - name: merchant_country
+        data_type: varchar
+      - name: currency
+        data_type: varchar
+      - name: amount
+        data_type: decimal(22,6)
+      - name: signed_amount
+        description: Negative for refunds.
+        data_type: decimal(22,6)
+      - name: response_code
+        data_type: varchar
+      - name: is_approved
+        data_type: boolean
+      - name: auth_code
+        data_type: varchar
+      - name: _source_file
+        data_type: varchar
+      - name: _pipeline_run_id
+        data_type: varchar
+      - name: _loaded_at
+        data_type: timestamp(6)
